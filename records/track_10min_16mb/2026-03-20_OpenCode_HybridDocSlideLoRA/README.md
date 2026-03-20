@@ -61,6 +61,9 @@ MAX_WALLCLOCK_SECONDS=0 \
 TRAIN_BATCH_TOKENS=65536 \
 VAL_LOSS_EVERY=0 \
 TTT_BATCH_SIZE=8 \
+DISABLE_COMPILE=1 \
+ENABLE_FLASH_SDP=0 \
+ENABLE_MATH_SDP=1 \
 torchrun --standalone --nproc_per_node=1 \
   records/track_10min_16mb/2026-03-20_OpenCode_HybridDocSlideLoRA/train_gpt.py
 ```

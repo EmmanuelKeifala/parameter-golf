@@ -83,6 +83,11 @@ class Hyperparameters:
     ttt_chunk_size = int(os.environ.get("TTT_CHUNK_SIZE", 128))
     ttt_eval_seq_len = int(os.environ.get("TTT_EVAL_SEQ_LEN", 0))
     ttt_batch_size = int(os.environ.get("TTT_BATCH_SIZE", 32))
+    disable_compile = bool(int(os.environ.get("DISABLE_COMPILE", "0")))
+    enable_flash_sdp = bool(int(os.environ.get("ENABLE_FLASH_SDP", "1")))
+    enable_math_sdp = bool(int(os.environ.get("ENABLE_MATH_SDP", "0")))
+    enable_mem_efficient_sdp = bool(int(os.environ.get("ENABLE_MEM_EFFICIENT_SDP", "0")))
+    enable_cudnn_sdp = bool(int(os.environ.get("ENABLE_CUDNN_SDP", "0")))
 
 def zeropower_via_newtonschulz5(G: Tensor, steps: int = 10, eps: float = 1e-7) -> Tensor:
     a, b, c = (3.4445, -4.7750, 2.0315)
@@ -1068,10 +1073,10 @@ def main() -> None:
     torch.backends.cudnn.allow_tf32 = True
     from torch.backends.cuda import enable_cudnn_sdp, enable_flash_sdp, enable_math_sdp, enable_mem_efficient_sdp
 
-    enable_cudnn_sdp(False)
-    enable_flash_sdp(True)
-    enable_mem_efficient_sdp(False)
-    enable_math_sdp(False)
+    enable_cudnn_sdp(args.enable_cudnn_sdp)
+    enable_flash_sdp(args.enable_flash_sdp)
+    enable_mem_efficient_sdp(args.enable_mem_efficient_sdp)
+    enable_math_sdp(args.enable_math_sdp)
 
     logfile = None
     if master_process:
@@ -1140,7 +1145,7 @@ def main() -> None:
         if isinstance(module, CastedLinear):
             module.float()
     restore_low_dim_params_to_fp32(base_model)
-    compiled_model = torch.compile(base_model, dynamic=False, fullgraph=True)
+    compiled_model = base_model if args.disable_compile else torch.compile(base_model, dynamic=False, fullgraph=True)
     model: nn.Module = DDP(compiled_model, device_ids=[local_rank], broadcast_buffers=False) if distributed else compiled_model
 
     block_named_params = list(base_model.blocks.named_parameters())
@@ -1401,7 +1406,7 @@ def main() -> None:
             f"Compiling forward_logits for sliding window eval "
             f"(stride={eval_stride}, seq_len={eval_sl}, batch_seqs={args.eval_batch_seqs})..."
         )
-        compiled_logits = torch.compile(base_model.forward_logits, dynamic=False)
+        compiled_logits = base_model.forward_logits if args.disable_compile else torch.compile(base_model.forward_logits, dynamic=False)
         eval_batch_seqs = args.eval_batch_seqs
         warmup_x = torch.zeros(eval_batch_seqs, eval_sl, dtype=torch.int64, device=device)
         base_model.eval()
